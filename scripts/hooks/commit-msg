@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# Conventional Commits validation hook
+# Validates that commit messages follow the Conventional Commits format
+
+commit_msg_file=$1
+commit_msg=$(cat "$commit_msg_file")
+
+# Remove comments and trim whitespace
+commit_msg_clean=$(echo "$commit_msg" | grep -v "^#" | head -n1)
+
+# Conventional Commits pattern:
+# type(scope): description
+# or
+# type: description
+pattern="^(feat|fix|docs|style|refactor|perf|test|chore|ci|revert)(\(.+\))?!?: .{1,}"
+
+if ! echo "$commit_msg_clean" | grep -qE "$pattern"; then
+    echo ""
+    echo "❌ Commit message does not follow Conventional Commits format"
+    echo ""
+    echo "Valid format:"
+    echo "  <type>[optional scope]: <description>"
+    echo ""
+    echo "Types: feat, fix, docs, style, refactor, perf, test, chore, ci, revert"
+    echo ""
+    echo "Examples:"
+    echo "  feat: add user authentication"
+    echo "  fix(api): handle null responses"
+    echo "  docs: update README"
+    echo "  refactor(utils): simplify data processing"
+    echo ""
+    exit 1
+fi
+
+exit 0
