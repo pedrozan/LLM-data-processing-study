@@ -54,12 +54,11 @@ services:
       DB_NAME: ${DB_NAME:-llm_data}
       DB_USER: ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DBT_PROFILES_DIR: /dbt
     volumes:
       - ./dbt_project:/dbt
     networks:
-      - llm-network
-    profiles:
-      - dbt  
+      - llm-network  
 
 volumes:
   postgres_data:
