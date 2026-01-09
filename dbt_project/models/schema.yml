@@ -7,6 +7,10 @@ sources:
     tables:
       - name: raw_support_tickets
         description: Raw support tickets loaded from CSV
+        freshness:
+          warn_after: {count: 1, period: day}
+          error_after: {count: 3, period: day}
+        loaded_at_field: loaded_at
         columns:
           - name: ticket_id
             description: Unique ticket identifier
@@ -23,3 +27,12 @@ models:
         tests:
           - unique
           - not_null
+      - name: ticket_description
+        description: Cleaned ticket description without HTML tags or special characters
+        tests:
+          - not_null
+      - name: language
+        description: Language of the ticket
+        tests:
+          - accepted_values:
+              values: ['english']

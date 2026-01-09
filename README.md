@@ -140,6 +140,15 @@ docker run --rm --network llm-data-processing-study_default \
   dbt docs generate
 ```
 
+**Run freshness checks:**
+```bash
+docker run --rm --network llm-data-processing-study_default \
+  -e DB_HOST=postgres -e DB_USER=postgres -e DB_PASSWORD=postgres -e DB_NAME=llm_data \
+  -v $(pwd)/dbt_project:/usr/app/dbt \
+  dbt-llm-data:latest \
+  dbt source freshness
+```
+
 ### Using a Docker Compose Service for DBT
 
 Alternatively, add a DBT service to your `docker-compose.yml` for easier orchestration:
