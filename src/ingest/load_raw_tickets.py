@@ -67,24 +67,49 @@ def create_table(conn):
         logger.error(f'Failed to create table: {e}')
         raise
 
+def get_existing_ticket_ids(conn):
+    """Get set of ticket_ids already in the database"""
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT ticket_id FROM raw_support_tickets")
+            existing_ids = {row[0] for row in cur.fetchall()}
+        return existing_ids
+    except Exception as e:
+        logger.error(f'Failed to retrieve existing ticket IDs: {e}')
+        return set()
+
 def load_csv_to_postgres(csv_path, conn):
-    """Load CSV data into raw_support_tickets table"""
+    """Load CSV data into raw_support_tickets table, skipping already ingested records"""
     try:
         # Read CSV file
         df = pd.read_csv(csv_path)
-        record_count = len(df)
-        logger.info(f'Loaded {record_count} rows from {csv_path}')
+        total_record_count = len(df)
+        logger.info(f'Loaded {total_record_count} rows from {csv_path}')
         
         # Clean column names (convert to lowercase, replace spaces with underscores)
         df.columns = df.columns.str.lower().str.replace(' ', '_')
         
+        # Get existing ticket IDs from database
+        existing_ids = get_existing_ticket_ids(conn)
+        logger.info(f'Found {len(existing_ids)} existing records in database')
+        
+        # Filter to only new records
+        df_new = df[~df['ticket_id'].isin(existing_ids)].copy()
+        new_record_count = len(df_new)
+        
+        if new_record_count == 0:
+            logger.info('No new records to ingest')
+            return 0
+        
+        logger.info(f'Found {new_record_count} new records to ingest (skipped {total_record_count - new_record_count} existing records)')
+        
         # Prepare data for insertion
         with conn.cursor() as cur:
             # Get column names from dataframe
-            columns = df.columns.tolist()
+            columns = df_new.columns.tolist()
             
             # Convert dataframe to list of tuples
-            values = [tuple(row) for row in df.values]
+            values = [tuple(row) for row in df_new.values]
             
             # Build INSERT query
             insert_query = f"""
@@ -96,8 +121,8 @@ def load_csv_to_postgres(csv_path, conn):
             execute_values(cur, insert_query, values)
             conn.commit()
             
-        logger.info(f'Successfully inserted {record_count} records into raw_support_tickets table')
-        return record_count
+        logger.info(f'Successfully inserted {new_record_count} new records into raw_support_tickets table')
+        return new_record_count
     except Exception as e:
         logger.error(f'Failed to load CSV data: {e}')
         raise
