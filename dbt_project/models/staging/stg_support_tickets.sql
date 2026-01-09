@@ -16,7 +16,21 @@ select
     date_of_purchase::date as date_of_purchase,
     ticket_type,
     ticket_subject,
-    ticket_description,
+    -- Clean description: remove HTML tags and special characters, keep plain text only
+    nullif(
+        trim(regexp_replace(
+            regexp_replace(
+                ticket_description,
+                '<[^>]*>',
+                '',
+                'g'
+            ),
+            '[^\w\s\.\,\!\?\-\:\;\'\"]',
+            '',
+            'g'
+        )),
+        ''
+    ) as ticket_description,
     ticket_status,
     resolution,
     ticket_priority,
