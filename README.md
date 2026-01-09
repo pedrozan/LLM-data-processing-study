@@ -81,6 +81,91 @@ docker-compose down
 docker-compose down -v
 ```
 
+## DBT Setup and Usage
+
+This project uses DBT (data build tool) to transform raw data into analytics-ready models. DBT runs in its own Docker container for isolated dependency management.
+
+### Building the DBT Docker Image
+
+Navigate to the dbt_project directory and build the image:
+
+```bash
+cd dbt_project
+docker build -t dbt-llm-data:latest .
+cd ..
+```
+
+### Running DBT Commands
+
+To run DBT commands (e.g., `dbt run`, `dbt test`, `dbt docs`), use:
+
+```bash
+docker run --rm \
+  --network llm-data-processing-study_default \
+  -e DB_HOST=postgres \
+  -e DB_USER=postgres \
+  -e DB_PASSWORD=postgres \
+  -e DB_NAME=llm_data \
+  -v $(pwd)/dbt_project:/usr/app/dbt \
+  dbt-llm-data:latest \
+  dbt run
+```
+
+### Common DBT Commands
+
+**Run all models:**
+```bash
+docker run --rm --network llm-data-processing-study_default \
+  -e DB_HOST=postgres -e DB_USER=postgres -e DB_PASSWORD=postgres -e DB_NAME=llm_data \
+  -v $(pwd)/dbt_project:/usr/app/dbt \
+  dbt-llm-data:latest \
+  dbt run
+```
+
+**Run tests:**
+```bash
+docker run --rm --network llm-data-processing-study_default \
+  -e DB_HOST=postgres -e DB_USER=postgres -e DB_PASSWORD=postgres -e DB_NAME=llm_data \
+  -v $(pwd)/dbt_project:/usr/app/dbt \
+  dbt-llm-data:latest \
+  dbt test
+```
+
+**Generate and serve documentation:**
+```bash
+docker run --rm --network llm-data-processing-study_default \
+  -e DB_HOST=postgres -e DB_USER=postgres -e DB_PASSWORD=postgres -e DB_NAME=llm_data \
+  -v $(pwd)/dbt_project:/usr/app/dbt \
+  dbt-llm-data:latest \
+  dbt docs generate
+```
+
+### Using a Docker Compose Service for DBT
+
+Alternatively, add a DBT service to your `docker-compose.yml` for easier orchestration:
+
+```yaml
+dbt:
+  build: ./dbt_project
+  depends_on:
+    postgres:
+      condition: service_healthy
+  environment:
+    - DB_HOST=postgres
+    - DB_USER=postgres
+    - DB_PASSWORD=postgres
+    - DB_NAME=llm_data
+  volumes:
+    - ./dbt_project:/usr/app/dbt
+  command: dbt run
+```
+
+Then run:
+```bash
+docker-compose run dbt dbt run
+docker-compose run dbt dbt test
+```
+
 ## Project Structure
 
 ```
