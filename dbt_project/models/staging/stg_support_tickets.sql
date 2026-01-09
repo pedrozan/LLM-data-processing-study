@@ -31,6 +31,24 @@ select
         )),
         ''
     ) as ticket_description,
+    -- Message length of cleaned description
+    char_length(
+        nullif(
+            trim(regexp_replace(
+                regexp_replace(
+                    ticket_description,
+                    '<[^>]*>',
+                    '',
+                    'g'
+                ),
+                '[^\w\s\.\,\!\?\-\:\;\'\"]',
+                '',
+                'g'
+            )),
+            ''
+        )
+    ) as message_length,
+    'english' as language,
     ticket_status,
     resolution,
     ticket_priority,
