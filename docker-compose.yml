@@ -35,7 +35,7 @@ services:
       DB_USER: ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD:-postgres}
     volumes:
-      - ./files:/app/files
+      - ./data:/app/data
       - ./logs:/app/logs
     networks:
       - llm-network

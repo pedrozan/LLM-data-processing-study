@@ -104,7 +104,7 @@ def load_csv_to_postgres(csv_path, conn):
 
 def main():
     """Main execution function"""
-    csv_path = '/app/files/customer_support_tickets.csv'
+    csv_path = '/app/data/raw/customer_support_tickets.csv'
     
     logger.info('Starting data ingestion process')
     

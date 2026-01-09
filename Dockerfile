@@ -13,7 +13,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY src/ src/
-COPY files/ files/
+COPY data/ data/
 
 # Run the ingestion script
 CMD ["python", "src/ingest/load_raw_tickets.py"]
