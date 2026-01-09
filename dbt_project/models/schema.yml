@@ -1,0 +1,25 @@
+version: 2
+
+sources:
+  - name: raw
+    database: "{{ env_var('DB_NAME', 'llm_data') }}"
+    schema: public
+    tables:
+      - name: raw_support_tickets
+        description: Raw support tickets loaded from CSV
+        columns:
+          - name: ticket_id
+            description: Unique ticket identifier
+            tests:
+              - unique
+              - not_null
+
+models:
+  - name: stg_support_tickets
+    description: Cleaned and standardized support tickets
+    columns:
+      - name: ticket_id
+        description: Unique ticket identifier
+        tests:
+          - unique
+          - not_null
