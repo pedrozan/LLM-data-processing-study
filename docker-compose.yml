@@ -35,10 +35,30 @@ services:
       DB_USER: ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD:-postgres}
     volumes:
-      - ./files:/app/files
+      - ./data:/app/data
       - ./logs:/app/logs
     networks:
       - llm-network
+
+  dbt:
+    build:
+      context: ./dbt_project
+      dockerfile: Dockerfile
+    container_name: llm-dbt
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-llm_data}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DBT_PROFILES_DIR: /dbt
+    volumes:
+      - ./dbt_project:/dbt
+    networks:
+      - llm-network  
 
 volumes:
   postgres_data:
@@ -46,3 +66,5 @@ volumes:
 networks:
   llm-network:
     driver: bridge
+
+  

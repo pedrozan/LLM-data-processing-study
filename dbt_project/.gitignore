@@ -1,0 +1,5 @@
+
+# dbt leaves behind log files and compiled code
+target/
+dbt_packages/
+logs/

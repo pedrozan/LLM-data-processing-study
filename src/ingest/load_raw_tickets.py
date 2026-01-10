@@ -4,6 +4,8 @@ import psycopg2
 import pandas as pd
 from psycopg2.extras import execute_values
 from datetime import datetime
+from io import StringIO
+import urllib.request
 
 # Configure logging
 log_dir = '/app/logs'
@@ -67,24 +69,57 @@ def create_table(conn):
         logger.error(f'Failed to create table: {e}')
         raise
 
+def get_existing_ticket_ids(conn):
+    """Get set of ticket_ids already in the database"""
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT ticket_id FROM raw_support_tickets")
+            existing_ids = {row[0] for row in cur.fetchall()}
+        return existing_ids
+    except Exception as e:
+        logger.error(f'Failed to retrieve existing ticket IDs: {e}')
+        return set()
+
 def load_csv_to_postgres(csv_path, conn):
-    """Load CSV data into raw_support_tickets table"""
+    """Load CSV data into raw_support_tickets table, skipping already ingested records"""
     try:
         # Read CSV file
         df = pd.read_csv(csv_path)
-        record_count = len(df)
-        logger.info(f'Loaded {record_count} rows from {csv_path}')
+        total_record_count = len(df)
+        logger.info(f'Loaded {total_record_count} rows from {csv_path}')
+        logger.info(f'CSV columns before cleaning: {df.columns.tolist()}')
         
         # Clean column names (convert to lowercase, replace spaces with underscores)
         df.columns = df.columns.str.lower().str.replace(' ', '_')
+        logger.info(f'CSV columns after cleaning: {df.columns.tolist()}')
+        
+        # Check if ticket_id column exists
+        if 'ticket_id' not in df.columns:
+            logger.warning('ticket_id column not found in CSV, skipping duplicate check. Available columns: ' + str(df.columns.tolist()))
+            df_new = df.copy()
+            new_record_count = len(df_new)
+        else:
+            # Get existing ticket IDs from database
+            existing_ids = get_existing_ticket_ids(conn)
+            logger.info(f'Found {len(existing_ids)} existing records in database')
+            
+            # Filter to only new records
+            df_new = df[~df['ticket_id'].isin(existing_ids)].copy()
+            new_record_count = len(df_new)
+        
+        if new_record_count == 0:
+            logger.info('No new records to ingest')
+            return 0
+        
+        logger.info(f'Found {new_record_count} new records to ingest (skipped {total_record_count - new_record_count} existing records)')
         
         # Prepare data for insertion
         with conn.cursor() as cur:
             # Get column names from dataframe
-            columns = df.columns.tolist()
+            columns = df_new.columns.tolist()
             
             # Convert dataframe to list of tuples
-            values = [tuple(row) for row in df.values]
+            values = [tuple(row) for row in df_new.values]
             
             # Build INSERT query
             insert_query = f"""
@@ -96,15 +131,15 @@ def load_csv_to_postgres(csv_path, conn):
             execute_values(cur, insert_query, values)
             conn.commit()
             
-        logger.info(f'Successfully inserted {record_count} records into raw_support_tickets table')
-        return record_count
+        logger.info(f'Successfully inserted {new_record_count} new records into raw_support_tickets table')
+        return new_record_count
     except Exception as e:
         logger.error(f'Failed to load CSV data: {e}')
         raise
 
 def main():
     """Main execution function"""
-    csv_path = '/app/files/customer_support_tickets.csv'
+    csv_url = 'https://raw.githubusercontent.com/pedrozan/LLM-data-processing-study/refs/heads/main/files/customer_support_tickets.csv'
     
     logger.info('Starting data ingestion process')
     
@@ -115,13 +150,71 @@ def main():
         # Create table
         create_table(conn)
         
+        # Download CSV from GitHub
+        logger.info(f'Downloading CSV from {csv_url}')
+        with urllib.request.urlopen(csv_url) as response:
+            csv_data = response.read().decode('utf-8')
+        
         # Load data
-        record_count = load_csv_to_postgres(csv_path, conn)
+        df = pd.read_csv(StringIO(csv_data))
+        
+        # Create a temporary file path for logging
+        csv_path = 'GitHub: ' + csv_url
+        
+        # Process the data (reuse the logic from load_csv_to_postgres)
+        total_record_count = len(df)
+        logger.info(f'Loaded {total_record_count} rows from {csv_path}')
+        logger.info(f'CSV columns before cleaning: {df.columns.tolist()}')
+        
+        # Clean column names (convert to lowercase, replace spaces with underscores)
+        df.columns = df.columns.str.lower().str.replace(' ', '_')
+        logger.info(f'CSV columns after cleaning: {df.columns.tolist()}')
+        
+        # Check if ticket_id column exists
+        if 'ticket_id' not in df.columns:
+            logger.warning('ticket_id column not found in CSV, skipping duplicate check. Available columns: ' + str(df.columns.tolist()))
+            df_new = df.copy()
+            new_record_count = len(df_new)
+        else:
+            # Get existing ticket IDs from database
+            existing_ids = get_existing_ticket_ids(conn)
+            logger.info(f'Found {len(existing_ids)} existing records in database')
+            
+            # Filter to only new records
+            df_new = df[~df['ticket_id'].isin(existing_ids)].copy()
+            new_record_count = len(df_new)
+        
+        if new_record_count == 0:
+            logger.info('No new records to ingest')
+            conn.close()
+            return
+        
+        logger.info(f'Found {new_record_count} new records to ingest (skipped {total_record_count - new_record_count} existing records)')
+        
+        # Prepare data for insertion
+        with conn.cursor() as cur:
+            # Get column names from dataframe
+            columns = df_new.columns.tolist()
+            
+            # Convert dataframe to list of tuples
+            values = [tuple(row) for row in df_new.values]
+            
+            # Build INSERT query
+            insert_query = f"""
+                INSERT INTO raw_support_tickets ({', '.join(columns)})
+                VALUES %s
+            """
+            
+            # Execute insertion
+            execute_values(cur, insert_query, values)
+            conn.commit()
+            
+        logger.info(f'Successfully inserted {new_record_count} new records into raw_support_tickets table')
         
         # Close connection
         conn.close()
         
-        logger.info(f'Data ingestion completed successfully - {record_count} records processed')
+        logger.info(f'Data ingestion completed successfully - {new_record_count} records processed')
         
     except Exception as e:
         logger.error(f'Data ingestion failed: {e}', exc_info=True)
