@@ -1,0 +1,54 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AI Support Ticket Enrichment",
+  "description": "Expected output schema for LLM-based support ticket enrichment",
+  "type": "object",
+  "required": [
+    "ticket_id",
+    "predicted_category",
+    "sentiment",
+    "urgency_score",
+    "summary",
+    "key_entities",
+    "confidence_score"
+  ],
+  "properties": {
+    "ticket_id": {
+      "type": "string",
+      "description": "Unique ticket identifier"
+    },
+    "predicted_category": {
+      "type": "string",
+      "description": "LLM-predicted issue category"
+    },
+    "sentiment": {
+      "type": "string",
+      "enum": ["positive", "neutral", "negative"],
+      "description": "Sentiment of the ticket content"
+    },
+    "urgency_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Urgency score (0 low, 1 high)"
+    },
+    "summary": {
+      "type": "string",
+      "description": "Short summary of the ticket text"
+    },
+    "key_entities": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Important entities extracted from the ticket"
+    },
+    "confidence_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Model’s confidence on the prediction"
+    }
+  },
+  "additionalProperties": false
+}
