@@ -1,0 +1,9 @@
+{
+  "ticket_id": "12345",
+  "predicted_category": "billing",
+  "sentiment": "negative",
+  "urgency_score": 0.82,
+  "summary": "Customer reports being charged twice for the same invoice.",
+  "key_entities": ["invoice", "double charge"],
+  "confidence_score": 0.91
+}

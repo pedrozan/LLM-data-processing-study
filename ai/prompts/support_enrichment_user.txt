@@ -1,0 +1,20 @@
+Given the following support ticket, extract structured information.
+
+Ticket ID:
+{{ ticket_id }}
+
+Ticket text:
+{{ ticket_text }}
+
+Return a JSON object with the following fields:
+- ticket_id (string)
+- predicted_category (string)
+- sentiment (one of: positive, neutral, negative)
+- urgency_score (number between 0 and 1)
+- summary (string, max 2 sentences)
+- key_entities (array of strings)
+- confidence_score (number between 0 and 1)
+
+IMPORTANT:
+- Return ONLY valid JSON
+- Match the schema exactly
