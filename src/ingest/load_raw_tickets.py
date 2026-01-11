@@ -6,6 +6,13 @@ from psycopg2.extras import execute_values
 from datetime import datetime
 from io import StringIO
 import urllib.request
+import subprocess
+from pathlib import Path
+
+DATA_DIR = Path("/app/data/raw")
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+CSV_FILENAME = "customer_support_tickets.csv"
+CSV_PATH = DATA_DIR / CSV_FILENAME
 
 # Configure logging
 log_dir = '/app/logs'
@@ -137,87 +144,120 @@ def load_csv_to_postgres(csv_path, conn):
         logger.error(f'Failed to load CSV data: {e}')
         raise
 
+
+def download_from_kaggle():
+    """
+    Download and unzip the customer support ticket dataset from Kaggle.
+    Requires KAGGLE_USERNAME and KAGGLE_KEY to be set as environment variables.
+    """
+    dataset = "suraj520/customer-support-ticket-dataset"
+
+    logger.info(f"Downloading dataset '{dataset}' from Kaggle")
+
+    subprocess.run(
+        [
+            "kaggle",
+            "datasets",
+            "download",
+            "-d",
+            dataset,
+            "-p",
+            str(DATA_DIR),
+            "--unzip"
+        ],
+        check=True
+    )
+
+    csv_path = DATA_DIR / CSV_FILENAME
+    if not csv_path.exists():
+        raise FileNotFoundError(
+            f"Expected CSV file not found after Kaggle download: {csv_path}"
+        )
+
+    logger.info(f"Dataset downloaded successfully to {csv_path}")
+
+
 def main():
     """Main execution function"""
-    csv_url = 'https://raw.githubusercontent.com/pedrozan/LLM-data-processing-study/refs/heads/main/files/customer_support_tickets.csv'
-    
-    logger.info('Starting data ingestion process')
-    
+    logger.info("Starting data ingestion process")
+
     try:
+        # Ensure raw data directory exists
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+        # Download CSV from Kaggle if not present
+        if not CSV_PATH.exists():
+            logger.info("CSV not found locally, downloading from Kaggle")
+            download_from_kaggle()
+        else:
+            logger.info("CSV already exists locally, skipping download")
+
+        # Load CSV from local filesystem
+        logger.info(f"Loading CSV from {CSV_PATH}")
+        df = pd.read_csv(CSV_PATH)
+
         # Connect to database
         conn = get_db_connection()
-        
-        # Create table
+
+        # Create table if not exists
         create_table(conn)
-        
-        # Download CSV from GitHub
-        logger.info(f'Downloading CSV from {csv_url}')
-        with urllib.request.urlopen(csv_url) as response:
-            csv_data = response.read().decode('utf-8')
-        
-        # Load data
-        df = pd.read_csv(StringIO(csv_data))
-        
-        # Create a temporary file path for logging
-        csv_path = 'GitHub: ' + csv_url
-        
-        # Process the data (reuse the logic from load_csv_to_postgres)
+
         total_record_count = len(df)
-        logger.info(f'Loaded {total_record_count} rows from {csv_path}')
-        logger.info(f'CSV columns before cleaning: {df.columns.tolist()}')
-        
-        # Clean column names (convert to lowercase, replace spaces with underscores)
-        df.columns = df.columns.str.lower().str.replace(' ', '_')
-        logger.info(f'CSV columns after cleaning: {df.columns.tolist()}')
-        
+        logger.info(f"Loaded {total_record_count} rows from {CSV_PATH}")
+        logger.info(f"CSV columns before cleaning: {df.columns.tolist()}")
+
+        # Clean column names
+        df.columns = df.columns.str.lower().str.replace(" ", "_")
+        logger.info(f"CSV columns after cleaning: {df.columns.tolist()}")
+
         # Check if ticket_id column exists
-        if 'ticket_id' not in df.columns:
-            logger.warning('ticket_id column not found in CSV, skipping duplicate check. Available columns: ' + str(df.columns.tolist()))
+        if "ticket_id" not in df.columns:
+            logger.warning(
+                "ticket_id column not found in CSV, skipping duplicate check. "
+                f"Available columns: {df.columns.tolist()}"
+            )
             df_new = df.copy()
-            new_record_count = len(df_new)
         else:
-            # Get existing ticket IDs from database
             existing_ids = get_existing_ticket_ids(conn)
-            logger.info(f'Found {len(existing_ids)} existing records in database')
-            
-            # Filter to only new records
-            df_new = df[~df['ticket_id'].isin(existing_ids)].copy()
-            new_record_count = len(df_new)
-        
+            logger.info(f"Found {len(existing_ids)} existing records in database")
+
+            df_new = df[~df["ticket_id"].isin(existing_ids)].copy()
+
+        new_record_count = len(df_new)
+
         if new_record_count == 0:
-            logger.info('No new records to ingest')
+            logger.info("No new records to ingest")
             conn.close()
             return
-        
-        logger.info(f'Found {new_record_count} new records to ingest (skipped {total_record_count - new_record_count} existing records)')
-        
-        # Prepare data for insertion
+
+        logger.info(
+            f"Found {new_record_count} new records to ingest "
+            f"(skipped {total_record_count - new_record_count} existing records)"
+        )
+
+        # Insert data
         with conn.cursor() as cur:
-            # Get column names from dataframe
             columns = df_new.columns.tolist()
-            
-            # Convert dataframe to list of tuples
             values = [tuple(row) for row in df_new.values]
-            
-            # Build INSERT query
+
             insert_query = f"""
                 INSERT INTO raw_support_tickets ({', '.join(columns)})
                 VALUES %s
             """
-            
-            # Execute insertion
+
             execute_values(cur, insert_query, values)
             conn.commit()
-            
-        logger.info(f'Successfully inserted {new_record_count} new records into raw_support_tickets table')
-        
-        # Close connection
+
+        logger.info(
+            f"Successfully inserted {new_record_count} new records "
+            "into raw_support_tickets table"
+        )
+
         conn.close()
-        
-        logger.info(f'Data ingestion completed successfully - {new_record_count} records processed')
-        
+        logger.info("Data ingestion completed successfully")
+
     except Exception as e:
-        logger.error(f'Data ingestion failed: {e}', exc_info=True)
+        logger.error(f"Data ingestion failed: {e}", exc_info=True)
         raise
 
 if __name__ == '__main__':

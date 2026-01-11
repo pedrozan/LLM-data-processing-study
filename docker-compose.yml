@@ -28,12 +28,24 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      ollama:
+        condition: service_started
     environment:
+      # Database
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: ${DB_NAME:-llm_data}
       DB_USER: ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD:-postgres}
+
+      # Kaggle (required for dataset download)
+      KAGGLE_USERNAME: ${KAGGLE_USERNAME}
+      KAGGLE_KEY: ${KAGGLE_KEY}
+
+      # Ollama / LLM
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: qwen2.5:3b
+
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
@@ -58,13 +70,23 @@ services:
     volumes:
       - ./dbt_project:/dbt
     networks:
-      - llm-network  
+      - llm-network
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama:/root/.ollama
+    restart: unless-stopped
+    networks:
+      - llm-network
 
 volumes:
   postgres_data:
+  ollama:
 
 networks:
   llm-network:
     driver: bridge
-
-  
